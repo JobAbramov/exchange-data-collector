@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from datetime import datetime
-from influxdb_client import InfluxDBClient, Point
+from influxdb_client import InfluxDBClient, Point, WritePrecision
 from influxdb_client.client.write_api import SYNCHRONOUS 
 from binance.client import Client
 from binance.enums import KLINE_INTERVAL_1MINUTE
@@ -39,19 +39,40 @@ class Binance(Exchange):
         data = []
 
         try:
-            fetch = Client(api_key=self.__api_key, api_secret=self.__api_secret).get_historical_klines(symbol=symbol, interval=interval, limit=limit, start_str= time_start, end_str=time_end, klines_type=kline_type)
+            fetch = Client(api_key=self.__api_key, api_secret=self.__api_secret) \
+            .get_historical_klines(symbol=symbol, interval=interval, limit=limit, start_str= time_start, end_str = time_end, klines_type=kline_type)
         except Exception as e:
             print('Exception occured!', e)
             exit()
 
         for item in fetch:
-            data.append({"open_time": item[0], "open_price": item[1], "high_price": item[2], "low_price": item[3], "close_price": item[4], "volume": item[5]})
-            
+            data.append({"name": "quote", "symbol": symbol, "open_time": item[0], "open_price": float(item[1]), "high_price": float(item[2]), "low_price": float(item[3]), "close_price": float(item[4]), "volume": float(item[5])})
+
         return data
 
     def save(self, data):
-        pass
+        with InfluxDBClient(url = self._db_url, token= self._db_token, org= self._db_org) as db:
+            w_api = db.write_api(write_options=SYNCHRONOUS)
 
+            for item in data:
+                point = Point.from_dict(item,
+                        write_precision=WritePrecision.MS,
+                        record_measurement_key="name",
+                        record_time_key="open_time",
+                        record_tag_keys = 
+                            ["symbol"],
+                        record_field_keys=
+                            ["open_price",
+                             "high_price",
+                             "low_price", 
+                             "close_price", 
+                             "volume"])
+
+                print('Writing', point)
+
+                w_api.write(bucket = self._db_bucket, org = self._db_org, record = point)
+                                   
+            
     def update(self,data):
         pass
         
