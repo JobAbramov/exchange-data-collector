@@ -16,7 +16,7 @@ class Exchange(ABC):
         self._db_bucket = db_bucket
 
     @abstractmethod
-    def fetch(self, symbol, interval, limit, time_start, kline_type, time_end=datetime.now()):
+    def fetch(self, symbol, interval, limit, time_start, kline_type, time_end):
         pass
 
     @abstractmethod
