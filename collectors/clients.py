@@ -43,8 +43,10 @@ class Binance(Exchange):
         except Exception as e:
             print('Exception occured!', e)
             exit()
+
         for item in fetch:
             data.append({"open_time": item[0], "open_price": item[1], "high_price": item[2], "low_price": item[3], "close_price": item[4], "volume": item[5]})
+            
         return data
 
     def save(self, data):
