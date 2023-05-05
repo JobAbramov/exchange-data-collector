@@ -4,7 +4,6 @@ from influxdb_client import InfluxDBClient, Point, WritePrecision
 from influxdb_client.client.write_api import SYNCHRONOUS 
 from binance.client import Client
 from binance.enums import KLINE_INTERVAL_1MINUTE
-from binance.helpers import date_to_milliseconds
 from sys import exit
 
 class Exchange(ABC):
@@ -38,9 +37,13 @@ class Binance(Exchange):
         fetch = []
         data = []
 
+        #костыль. Нормальное решение оставлю до лучших времён. Главное, что так работает
+        time_start_str = str(datetime.fromtimestamp(time_start)) if type(time_start) == int else time_start
+        time_end_str = str(datetime.fromtimestamp(time_end)) if type(time_end) == int else time_end
+
         try:
             fetch = Client(api_key=self.__api_key, api_secret=self.__api_secret) \
-            .get_historical_klines(symbol=symbol, interval=interval, limit=limit, start_str= time_start, end_str = time_end, klines_type=kline_type)
+            .get_historical_klines(symbol=symbol, interval=interval, limit=limit, start_str= time_start_str, end_str = time_end_str, klines_type=kline_type)
         except Exception as e:
             print('Exception occured!', e)
             exit()
@@ -73,6 +76,20 @@ class Binance(Exchange):
                 w_api.write(bucket = self._db_bucket, org = self._db_org, record = point)
                                    
             
-    def update(self,data):
-        pass
-        
+    def update(self, symbol, kline_type, time_end=None, limit=500, interval = KLINE_INTERVAL_1MINUTE):
+        with InfluxDBClient(url = self._db_url, token= self._db_token, org= self._db_org) as db:
+            q_api = db.query_api()
+
+            response = q_api.query('''from(bucket: "main")
+                                    |> range(start: -7d)
+                                    |> filter(fn: (r) => r["_measurement"] == "quote")
+                                    |> filter(fn: (r) => r["_field"] == "open_price")
+                                    |> last()
+                                ''')
+
+            time = int(response.to_values(columns=["_time"])[0][0].timestamp())
+        data = self.fetch(symbol = symbol, time_start = time, kline_type = kline_type, time_end = time_end, limit = limit, interval= interval)
+
+        self.save(data)
+
+            
