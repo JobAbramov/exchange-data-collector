@@ -49,7 +49,6 @@ class Binance(Exchange):
             exit()
 
         for item in fetch:
-            # Может open_time - это и есть лишняя нагрузка на название, но с ним намного проще заставить influx загрузить в себя данные. Иначе - былинный отказ. Оставляю
             data.append({"symbol": symbol, "time": item[0] ,"open": float(item[1]), "high": float(item[2]), "low": float(item[3]), "close": float(item[4]), "volume": float(item[5])})
 
         return data
