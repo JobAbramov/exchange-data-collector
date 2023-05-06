@@ -39,17 +39,13 @@ class Influx(DB):
         self.close()
         
     def insert(self, data, **kwargs):
-        '''Запрос вставки'''
+        '''Запрос вставки
+            kwargs - measurement, tags, fields, time
+        '''
         w_api = self.__connection.write_api(write_options=SYNCHRONOUS)
         
         for item in data:
-            point = self._dict_to_point(item, measurement = str(kwargs.get("measurement")), tags = list(kwargs.get("tags", "tag")), fields = list(kwargs.get("fields")), time = kwargs.get("time"))
-            #point = Point.from_dict(item,
-            #        write_precision=WritePrecision.MS,
-            #        record_measurement_key = str(kwargs.get("measurement")),
-            #        record_time_key= kwargs.get("time"),
-            #        record_tag_keys = list(kwargs.get("tags", [])),
-            #        record_field_keys = list(kwargs.get("fields")))
+            point = self._dict_to_point(item, measurement = str(kwargs.get("measurement")), tags = list(kwargs.get("tags", [])), fields = list(kwargs.get("fields")), time = kwargs.get("time"))
             print('Writing', point)
             w_api.write(bucket = self._db_bucket, org = self._db_org, record = point)
 
