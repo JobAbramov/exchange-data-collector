@@ -19,6 +19,10 @@ class DB(ABC):
             Порядок определяется по порядку упоминания в теле запроса'''
         pass
 
+    @abstractmethod
+    def close(self):
+        pass
+
 
 class Influx(DB):
     def __init__(self, db_url, db_token, db_org, db_bucket):
@@ -26,17 +30,28 @@ class Influx(DB):
         self._db_token = db_token
         self._db_org = db_org
         self._db_bucket = db_bucket
+        self.__connection = InfluxDBClient(url = self._db_url, token = self._db_token, org = self._db_org)
+
+    def __enter__(self):
+        return self
+    
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.close()
         
     def insert(self, data, **kwargs):
         '''Запрос вставки'''
-        with InfluxDBClient(url = self._db_url, token= self._db_token, org= self._db_org) as db:
-            w_api = db.write_api(write_options=SYNCHRONOUS)
-            
-            for item in data:
-                point = self._dict_to_point(item[1], measurement = str(kwargs.get("measurement")), tags = list(kwargs.get("tags", "tag")), fields = list(kwargs.get("fields")), time = item[0])
-                print('Writing', point)
-
-                w_api.write(bucket = self._db_bucket, org = self._db_org, record = point)
+        w_api = self.__connection.write_api(write_options=SYNCHRONOUS)
+        
+        for item in data:
+            point = self._dict_to_point(item, measurement = str(kwargs.get("measurement")), tags = list(kwargs.get("tags", "tag")), fields = list(kwargs.get("fields")), time = kwargs.get("time"))
+            #point = Point.from_dict(item,
+            #        write_precision=WritePrecision.MS,
+            #        record_measurement_key = str(kwargs.get("measurement")),
+            #        record_time_key= kwargs.get("time"),
+            #        record_tag_keys = list(kwargs.get("tags", [])),
+            #        record_field_keys = list(kwargs.get("fields")))
+            print('Writing', point)
+            w_api.write(bucket = self._db_bucket, org = self._db_org, record = point)
 
     def select(self, body, to_json, columns, *args):
         '''Запрос выборки. args - measure, tags, fields
@@ -53,10 +68,9 @@ class Influx(DB):
                 ...
                           
         '''
-        with InfluxDBClient(url = self._db_url, token= self._db_token, org= self._db_org) as db:
-            q_api = db.query_api()
-            query = body.format(*args)                              
-            response = q_api.query(query)
+        q_api = self.__connection.query_api()
+        query = body.format(*args)                              
+        response = q_api.query(query)
 
         return response.to_json() if to_json else response.to_values(columns=columns)
 
@@ -68,13 +82,16 @@ class Influx(DB):
                                     |> last()
                                 ''', False, ["_time"], self._db_bucket, measurement)
 
-        return int(time[0][0].timestamp())
+        if len(time) > 0:
+            return int(time[0][0].timestamp())
 
     def _dict_to_point(self, dict, measurement, fields, tags = None, write_precision = WritePrecision.MS, time = None):
-        return Point.from_dict(
-                                dict, 
-                                write_precision, 
-                                record_measurement_key=measurement,
-                                record_tag_keys=tags,
-                                record_field_keys=fields
-                              ).time(time)
+        return Point.from_dict(dict,
+                        write_precision=WritePrecision.MS,
+                        record_measurement_key = measurement,
+                        record_time_key= time,
+                        record_tag_keys = tags,
+                        record_field_keys = fields)
+    
+    def close(self):
+        self.__connection.close()
