@@ -32,12 +32,13 @@ class Binance(Exchange):
         self.close()
 
     def fetch(self, symbol, time_start, time_end = None, interval = KLINE_INTERVAL_1MINUTE, kline_type = kline_type.SPOT, limit = 500):
+        '''Получение исторической информации о цене и объёме с Binance API'''
         fetch = []
         data = []
 
-        # Костыль. Нормальное решение оставлю до лучших времён. Главное, что так работает
-        time_start_str = str(datetime.fromtimestamp(time_start)) if type(time_start) == int else time_start
-        time_end_str = str(datetime.fromtimestamp(time_end)) if type(time_end) == int else time_end
+        #datetime в строку
+        time_start_str = str(time_start) if time_start else None
+        time_end_str = str(time_end) if time_end else None
 
         try:
             # get_historical_klines циклично достаёт данные с бинанса, пока не дойдёт до конечной даты (по умолчанию это текущая дата),

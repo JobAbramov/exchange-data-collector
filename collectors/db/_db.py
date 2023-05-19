@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from influxdb_client import InfluxDBClient, Point, WritePrecision
 from influxdb_client.client.write_api import SYNCHRONOUS
-
+from datetime import datetime
 
 class DB(ABC):
     @abstractmethod
@@ -54,7 +54,7 @@ class Influx(DB):
             Порядок определяется по порядку упоминания в теле запроса
             columns - Ключи, по которым будут извлекаться значения из выборки
             body = from(bucket: "{}")
-                |> range(start: -7d)
+                |> range(start: {})
                 |> filter(fn: (r) => r["_measurement"] == "{}")
                 ... 
                 |> filter(fn: (r) => r["_field"] == {})
@@ -71,15 +71,17 @@ class Influx(DB):
         return response.to_json() if to_json else response.to_values(columns=columns)
 
 
-    def get_last_date(self, measurement):
+    def get_last_date(self, measurement, range_start = '-30d'):
+        '''range_start - начальная дата, с которой надо начинать искать последнюю дату.
+        Задаётся либо текстовой константой (например, -7d), либо через timestamp'''
         time = self.select('''from(bucket: "{}")
-                                    |> range(start: -7d)
+                                    |> range(start: {})
                                     |> filter(fn: (r) => r["_measurement"] == "{}")
                                     |> last()
-                                ''', False, ["_time"], self._db_bucket, measurement)
+                                ''', False, ["_time"], self._db_bucket, range_start, measurement)
 
         if len(time) > 0:
-            return int(time[0][0].timestamp())
+            return time[0][0]
 
     def _dict_to_point(self, dict, measurement, fields, tags = None, write_precision = WritePrecision.MS, time = None):
         return Point.from_dict(dict,
