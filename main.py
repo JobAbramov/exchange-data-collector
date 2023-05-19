@@ -28,6 +28,6 @@ with Influx(db_url= URL, db_token = TOKEN, db_org = ORG, db_bucket = BUCKET) as 
         res = bn.fetch(symbol, time_start=d_start, time_end=d_end, limit=1000)
         db.insert(res, measurement="symbol", fields=["open", "high", "low", "close", "volume"], time = "time")
     except Exception as e:
-        print(f'Error occured: {e}. {e.args}')
+        print(f'Error occured: {e}')
     
     print('Data is up to date')
