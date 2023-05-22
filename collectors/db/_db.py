@@ -49,14 +49,15 @@ class Influx(DB):
             print('Writing', point)
             w_api.write(bucket = self._db_bucket, org = self._db_org, record = point)
 
-    def select(self, bucket, measurements, dt_start, dt_end = None, fields = None,to_json = False):
+    def select(self, bucket, measurements, dt_start, dt_end = None, fields = None,to_json = False, is_last = False):
         '''Запрос выборки'''
 
         bucket_str = f'from(bucket: "{bucket}")'
-        range_str = f'|> range(start:{dt_start}' + (f', stop: {dt_end}' if dt_end else '') + ')'
+        range_str = f'|> range(start: {dt_start}' + (f', stop:{dt_end}' if dt_end else '') + ')'
         measurements_str = '|> filter(fn: (r) => ' + (' or '.join([f'r["_measurement"] == "{measurement}"' for measurement in measurements])) + ')'
         fields_str ='|> filter(fn: (r) => ' + (' or '.join([f'r["_field"] == "{field}"' for field in fields])) + ')' if fields else ''
-        query = '\n\t'.join([bucket_str, range_str, measurements_str, fields_str])
+        is_last_str = '|> last()' if is_last else ''
+        query = '\n\t'.join([bucket_str, range_str, measurements_str, fields_str, is_last_str])
 
         q_api = self.__connection.query_api()                           
         response = q_api.query(query)
@@ -67,11 +68,7 @@ class Influx(DB):
     def get_last_date(self, measurement, range_start = '-30d'):
         '''range_start - начальная дата, с которой надо начинать искать последнюю дату.
         Задаётся либо текстовой константой (например, -7d), либо через timestamp'''
-        time = self.select('''from(bucket: "{}")
-                                    |> range(start: {})
-                                    |> filter(fn: (r) => r["_measurement"] == "{}")
-                                    |> last()
-                                ''', False, ["_time"], self._db_bucket, range_start, measurement)
+        time = self.select(self._db_bucket, measurement, range_start, is_last=True)
 
         if len(time) > 0:
             return time[0][0]
