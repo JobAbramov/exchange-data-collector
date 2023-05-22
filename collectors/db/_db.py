@@ -57,7 +57,7 @@ class Influx(DB):
         measurements_str = '|> filter(fn: (r) => ' + (' or '.join([f'r["_measurement"] == "{measurement}"' for measurement in measurements])) + ')'
         fields_str ='|> filter(fn: (r) => ' + (' or '.join([f'r["_field"] == "{field}"' for field in fields])) + ')' if fields else ''
         is_last_str = '|> last()' if is_last else ''
-        query = '\n\t'.join([bucket_str, range_str, measurements_str, fields_str, is_last_str])
+        query = '\n\t'.join([bucket_str, range_str, measurements_str, fields_str, is_last_str]).rstrip()
 
         q_api = self.__connection.query_api()                           
         response = q_api.query(query)
