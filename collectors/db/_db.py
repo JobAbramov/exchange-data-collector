@@ -49,26 +49,19 @@ class Influx(DB):
             print('Writing', point)
             w_api.write(bucket = self._db_bucket, org = self._db_org, record = point)
 
-    def select(self, body, to_json, columns, *args):
-        '''Запрос выборки. args - measure, tags, fields
-            Порядок определяется по порядку упоминания в теле запроса
-            columns - Ключи, по которым будут извлекаться значения из выборки
-            body = from(bucket: "{}")
-                |> range(start: {})
-                |> filter(fn: (r) => r["_measurement"] == "{}")
-                ... 
-                |> filter(fn: (r) => r["_field"] == {})
-                ... 
-                ... 
-                |> filter(fn: (r) => r["{}"] == {})
-                ...
-                          
-        '''
-        q_api = self.__connection.query_api()
-        query = body.format(*args)                              
+    def select(self, bucket, measurements, dt_start, dt_end = None, fields = None,to_json = False):
+        '''Запрос выборки'''
+
+        bucket_str = f'from(bucket: "{bucket}")'
+        range_str = f'|> range(start:{dt_start}' + (f', stop: {dt_end}' if dt_end else '') + ')'
+        measurements_str = '|> filter(fn: (r) => ' + (' or '.join([f'r["_measurement"] == "{measurement}"' for measurement in measurements])) + ')'
+        fields_str ='|> filter(fn: (r) => ' + (' or '.join([f'r["_field"] == "{field}"' for field in fields])) + ')' if fields else ''
+        query = '\n\t'.join([bucket_str, range_str, measurements_str, fields_str])
+
+        q_api = self.__connection.query_api()                           
         response = q_api.query(query)
 
-        return response.to_json() if to_json else response.to_values(columns=columns)
+        return response.to_json() if to_json else response.to_values(columns=['_time', '_measurement', '_field', '_value'])
 
 
     def get_last_date(self, measurement, range_start = '-30d'):
