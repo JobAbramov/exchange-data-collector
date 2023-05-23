@@ -2,6 +2,8 @@ from abc import ABC, abstractmethod
 from influxdb_client import InfluxDBClient, Point, WritePrecision
 from influxdb_client.client.write_api import SYNCHRONOUS
 from datetime import datetime
+import pandas as pd
+import numpy as np
 
 class DB(ABC):
     @abstractmethod
@@ -49,7 +51,7 @@ class Influx(DB):
             print('Writing', point)
             w_api.write(bucket = self._db_bucket, org = self._db_org, record = point)
 
-    def select(self, bucket, measurements, dt_start, dt_end = None, fields = None,to_json = False, is_last = False):
+    def select(self, bucket, measurements, dt_start, dt_end = None, interval = '1m',fields = None, to_json = False, to_dataframe = False, is_last = False):
         '''Запрос выборки'''
 
         bucket_str = f'from(bucket: "{bucket}")'
@@ -57,18 +59,33 @@ class Influx(DB):
         measurements_str = '|> filter(fn: (r) => ' + (' or '.join([f'r["_measurement"] == "{measurement}"' for measurement in measurements])) + ')'
         fields_str ='|> filter(fn: (r) => ' + (' or '.join([f'r["_field"] == "{field}"' for field in fields])) + ')' if fields else ''
         is_last_str = '|> last()' if is_last else ''
-        query = '\n\t'.join([bucket_str, range_str, measurements_str, fields_str, is_last_str]).rstrip()
+        interval_str = f'|> aggregateWindow(every: {interval}, fn: mean, createEmpty: false)' if interval != '1m' else ''
 
-        q_api = self.__connection.query_api()                           
-        response = q_api.query(query)
+        query = '\n\t'.join([bucket_str, range_str, measurements_str, fields_str, interval_str, is_last_str]).rstrip()
 
+        q_api = self.__connection.query_api()
+
+        if to_dataframe:
+            query += '\n\t|> pivot(rowKey:["_time"], columnKey:["_field"], valueColumn: "_value")'
+            try:
+                response = q_api.query_data_frame(query).drop(['result', 'table', '_start', '_stop'], axis=1).set_index(['_time'])
+            except Exception as e:
+                print('Error occured:', e)
+                return
+            return response
+            
+        try:
+            response = q_api.query(query)
+        except Exception as e:
+            print('Error occured:', e)
+            return
         return response.to_json() if to_json else response.to_values(columns=['_time', '_measurement', '_field', '_value'])
 
 
     def get_last_date(self, measurement, range_start = '-30d'):
         '''range_start - начальная дата, с которой надо начинать искать последнюю дату.
         Задаётся либо текстовой константой (например, -7d), либо через timestamp'''
-        time = self.select(self._db_bucket, measurement, range_start, is_last=True)
+        time = self.select(self._db_bucket, [measurement], range_start, is_last=True)
 
         if len(time) > 0:
             return time[0][0]
