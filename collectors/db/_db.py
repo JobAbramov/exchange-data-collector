@@ -91,7 +91,9 @@ class Influx(DB):
     
     @staticmethod
     def resample(data, interval):
-        return data.resample(interval).mean()
+        #return data.resample(interval).mean()
+        ohlc_dict = {'open':'first', 'high':'max', 'low':'min', 'close': 'last', 'volume': 'sum'}
+        return data.resample(interval).apply(ohlc_dict).dropna(how='any')
 
     def _dict_to_point(self, dict, measurement, fields, tags = None, write_precision = WritePrecision.MS, time = None):
         return Point.from_dict(dict,
