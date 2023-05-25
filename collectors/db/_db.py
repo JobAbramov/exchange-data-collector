@@ -91,7 +91,6 @@ class Influx(DB):
     
     @staticmethod
     def resample(data, interval):
-        #return data.resample(interval).mean()
         ohlc_dict = {'open':'first', 'high':'max', 'low':'min', 'close': 'last', 'volume': 'sum'}
         return data.resample(interval).apply(ohlc_dict).dropna(how='any')
 
