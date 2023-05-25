@@ -89,7 +89,8 @@ class Influx(DB):
         if len(time) > 0:
             return time[0][0]
     
-    def resample(self, data, interval):
+    @staticmethod
+    def resample(data, interval):
         return data.resample(interval).mean()
 
     def _dict_to_point(self, dict, measurement, fields, tags = None, write_precision = WritePrecision.MS, time = None):
