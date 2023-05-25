@@ -51,24 +51,23 @@ class Influx(DB):
             print('Writing', point)
             w_api.write(bucket = self._db_bucket, org = self._db_org, record = point)
 
-    def select(self, bucket, measurements, dt_start, dt_end = None, interval = '1m',fields = None, to_json = False, to_dataframe = False, is_last = False):
+    def select(self, bucket, measurement, dt_start, dt_end = None,fields = None, to_json = False, to_dataframe = False, is_last = False):
         '''Запрос выборки'''
 
         bucket_str = f'from(bucket: "{bucket}")'
         range_str = f'|> range(start: {dt_start}' + (f', stop:{dt_end}' if dt_end else '') + ')'
-        measurements_str = '|> filter(fn: (r) => ' + (' or '.join([f'r["_measurement"] == "{measurement}"' for measurement in measurements])) + ')'
+        measurement_str = f'|> filter(fn: (r) => r["_measurement"] == "{measurement}"' + ')'
         fields_str ='|> filter(fn: (r) => ' + (' or '.join([f'r["_field"] == "{field}"' for field in fields])) + ')' if fields else ''
         is_last_str = '|> last()' if is_last else ''
-        interval_str = f'|> aggregateWindow(every: {interval}, fn: mean, createEmpty: false)' if interval != '1m' else ''
 
-        query = '\n\t'.join([bucket_str, range_str, measurements_str, fields_str, interval_str, is_last_str]).rstrip()
+        query = '\n\t'.join([bucket_str, range_str, measurement_str, fields_str, is_last_str]).rstrip()
 
         q_api = self.__connection.query_api()
 
         if to_dataframe:
             query += '\n\t|> pivot(rowKey:["_time"], columnKey:["_field"], valueColumn: "_value")'
             try:
-                response = q_api.query_data_frame(query).drop(['result', 'table', '_start', '_stop'], axis=1).set_index(['_time'])
+                response = q_api.query_data_frame(query).drop(['result', 'table','_start', '_stop','_measurement'], axis=1).set_index('_time')
             except Exception as e:
                 print('Error occured:', e)
                 return
@@ -79,7 +78,7 @@ class Influx(DB):
         except Exception as e:
             print('Error occured:', e)
             return
-        return response.to_json() if to_json else response.to_values(columns=['_time', '_measurement', '_field', '_value'])
+        return response.to_json() if to_json else response.to_values(columns=['_time', '_field', '_value'])
 
 
     def get_last_date(self, measurement, range_start = '-30d'):
@@ -89,6 +88,9 @@ class Influx(DB):
 
         if len(time) > 0:
             return time[0][0]
+    
+    def resample(self, data, interval):
+        return data.resample(interval).mean()
 
     def _dict_to_point(self, dict, measurement, fields, tags = None, write_precision = WritePrecision.MS, time = None):
         return Point.from_dict(dict,
