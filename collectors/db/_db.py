@@ -4,6 +4,7 @@ from influxdb_client.client.write_api import SYNCHRONOUS
 from datetime import datetime
 import pandas as pd
 import numpy as np
+import re
 
 class DB(ABC):
     @abstractmethod
@@ -91,8 +92,15 @@ class Influx(DB):
     
     @staticmethod
     def resample(data, interval):
-        ohlc_dict = {'open':'first', 'high':'max', 'low':'min', 'close': 'last', 'volume': 'sum'}
-        return data.resample(interval).apply(ohlc_dict).dropna(how='any')
+        ohlc_dict = {'open':'first', 'high':'max', 'low':'min', 'close': 'last', 'volume': 'sum'} 
+        ohlc_df = data.resample(interval).apply(ohlc_dict).dropna(how='any')
+        ex = re.compile('.*(w|W)$')
+        ex2 = re.compile('.*(M|m)$')
+        if ex.match(interval):
+            ohlc_df.index = ohlc_df.index - pd.tseries.frequencies.to_offset('6D')
+        elif ex2.match(interval):
+            ohlc_df.index = ohlc_df.index - pd.tseries.offsets.MonthBegin()
+        return ohlc_df
 
     def _dict_to_point(self, dict, measurement, fields, tags = None, write_precision = WritePrecision.MS, time = None):
         return Point.from_dict(dict,
